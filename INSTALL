@@ -1,0 +1,9 @@
+Building StarCoin
+
+See doc/readme-qt.rst for instructions on building StarCoin QT,
+the intended-for-end-users, nice-graphical-interface, reference
+implementation of StarCoin.
+
+See doc/build-*.txt for instructions on building StarCoind,
+the intended-for-services, no-graphical-interface, reference
+implementation of StarCoin.
