@@ -956,7 +956,9 @@ int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 	int rand = generateMTRandom(seed, 14400);
 	int rand1 = 0;
 
-	if(rand > 10000 && rand < 10121)	
+	// printf(">>> nHeight = %d, Rand = %d\n", nHeight, rand);
+
+	if(rand > 10000 && rand < 10121)	// 120/14400 = 1/120
 	{
 		cseed_str = prevHash.ToString().substr(6,7);
 		cseed = cseed_str.c_str();
@@ -964,7 +966,7 @@ int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 		rand1 = generateMTRandom(seed, 601);
 		nSubsidy = (200 + rand1 - 1) * COIN;
 	}
-	else if(rand > 4000 && rand < 4011)	
+	else if(rand > 4000 && rand < 4011)	// 10/14400 = 1/1440
 	{
 		cseed_str = prevHash.ToString().substr(7,7);
 		cseed = cseed_str.c_str();
@@ -978,8 +980,9 @@ int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 		cseed = cseed_str.c_str();
 		seed = hex2long(cseed);
 		rand = generateMTRandom(seed, 500000);
+		// printf(">>> Rand $$ = %d\n", rand);
 
-		if(rand > 300000 && rand < 300026)	
+		if(rand > 300000 && rand < 300026)	// 25/500000 = 1/20000
 		{
 			cseed_str = prevHash.ToString().substr(4,7);
 			cseed = cseed_str.c_str();
@@ -987,7 +990,7 @@ int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 			rand1 = generateMTRandom(seed, 20001);
 			nSubsidy = (10000 + rand1 - 1) * COIN;
 		}
-		else if(rand > 460000 && rand < 460003)	
+		else if(rand > 460000 && rand < 460003)	// 2/500000 = 1/250000
 		{
 			nSubsidy = 100000 * COIN;
 		}
@@ -1035,8 +1038,8 @@ int64 GetProofOfStakeReward(int64 nCoinAge, unsigned int nBits, unsigned int nTi
         nRewardCoinYear = min((nRewardCoinYear / CENT) * CENT, MAX_MINT_PROOF_OF_STAKE);
 
     int64 nSubsidy = nCoinAge * 33 / (365 * 33 + 8) * nRewardCoinYear;
-    if (fDebug && GetBoolArg("-printcreation"))
-        printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRI64d" nBits=%d\n", FormatMoney(nSubsidy).c_str(), nCoinAge, nBits);
+    // if (fDebug && GetBoolArg("-printcreation"))
+        printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRI64d" nBits=%d nRewardCoinYear=%"PRI64d"\n", FormatMoney(nSubsidy).c_str(), nCoinAge, nBits, nRewardCoinYear);
     return nSubsidy;
 }
 
@@ -1047,10 +1050,8 @@ static const int64 nTargetSpacingWorkMax = 12 * nStakeTargetSpacing; // 6 mins
 // minimum amount of work that could possibly be required nTime after
 // minimum work required was nBase
 //
-unsigned int ComputeMinWork(unsigned int nBase, int64 nTime)
+unsigned int ComputeMaxBits(CBigNum bnTargetLimit, unsigned int nBase, int64 nTime)
 {
-    CBigNum bnTargetLimit = bnProofOfWorkLimit;
-
     CBigNum bnResult;
     bnResult.SetCompact(nBase);
     bnResult *= 2;
@@ -1065,6 +1066,25 @@ unsigned int ComputeMinWork(unsigned int nBase, int64 nTime)
     return bnResult.GetCompact();
 }
 
+//
+// minimum amount of work that could possibly be required nTime after
+// minimum proof-of-work required was nBase
+//
+unsigned int ComputeMinWork(unsigned int nBase, int64 nTime)
+{
+    return ComputeMaxBits(bnProofOfWorkLimit, nBase, nTime);
+}
+
+//
+// minimum amount of stake that could possibly be required nTime after
+// minimum proof-of-stake required was nBase
+//
+unsigned int ComputeMinStake(unsigned int nBase, int64 nTime, unsigned int nBlockTime)
+{
+    return ComputeMaxBits(bnProofOfStakeLimit, nBase, nTime);
+}
+
+
 // ppcoin: find last block index up to pindex
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
 {
@@ -1073,15 +1093,9 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
     return pindex;
 }
 
-unsigned int static GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake)
+unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake)
 {
-    CBigNum bnTargetLimit = bnProofOfWorkLimit;
-
-    if(fProofOfStake)
-    {
-        // Proof-of-Stake blocks has own target limit since nVersion=3 supermajority on mainNet and always on testNet
-        bnTargetLimit = bnProofOfStakeLimit;
-    }
+	CBigNum bnTargetLimit = !fProofOfStake ? bnProofOfWorkLimit : bnProofOfStakeLimit;
 
     if (pindexLast == NULL)
         return bnTargetLimit.GetCompact(); // genesis block
@@ -1853,8 +1867,10 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     nTimeBestReceived = GetTime();
     nTransactionsUpdated++;
     printf("SetBestChain: new best=%s  height=%d  trust=%s  date=%s\n",
-      hashBestChain.ToString().substr(0,20).c_str(), nBestHeight, bnBestChainTrust.ToString().c_str(),
+      hashBestChain.ToString().c_str(), nBestHeight, bnBestChainTrust.ToString().c_str(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+
+	printf("Stake checkpoint: %x\n", pindexBest->nStakeModifierChecksum);
 
     // Check the version of the last 100 blocks to see if we need to upgrade:
     if (!fIsInitialDownload)
@@ -2035,7 +2051,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
 
 bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot) const
 {
-    // These are checks that are independent of context
+	// These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
     // Size limits
@@ -2193,6 +2209,26 @@ bool CBlock::AcceptBlock()
     return true;
 }
 
+CBigNum CBlockIndex::GetBlockTrust() const
+{
+    CBigNum bnTarget;
+    bnTarget.SetCompact(nBits);
+    if (bnTarget <= 0)
+        return 0;
+
+    if (IsProofOfStake())
+    {
+        // Return trust score as usual
+        return (CBigNum(1)<<256) / (bnTarget+1);
+    }
+    else
+    {
+        // Calculate work amount for block
+        CBigNum bnPoWTrust = (bnProofOfWorkLimit / (bnTarget+1));
+        return bnPoWTrust > 1 ? bnPoWTrust : 1;
+    }
+} 
+
 bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck)
 {
     unsigned int nFound = 0;
@@ -2245,8 +2281,13 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
         CBigNum bnNewBlock;
         bnNewBlock.SetCompact(pblock->nBits);
         CBigNum bnRequired;
-        bnRequired.SetCompact(ComputeMinWork(GetLastBlockIndex(pcheckpoint, pblock->IsProofOfStake())->nBits, deltaTime));
-        if (bnNewBlock > bnRequired)
+
+        if (pblock->IsProofOfStake())
+            bnRequired.SetCompact(ComputeMinStake(GetLastBlockIndex(pcheckpoint, true)->nBits, deltaTime, pblock->nTime));
+        else
+            bnRequired.SetCompact(ComputeMinWork(GetLastBlockIndex(pcheckpoint, false)->nBits, deltaTime));
+
+		if (bnNewBlock > bnRequired)
         {
             if (pfrom)
                 pfrom->Misbehaving(100);
