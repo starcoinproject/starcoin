@@ -1,7 +1,7 @@
 
 StarCoin - a decendent of Novacoin/PPCoin with Pow/PoS. It combines the great features from Luckycoin (random blocks) and Florincoin (transaction message). It is the first PoW/PoS coin supporting random blocks.
 
-The official website is: diamondcoin.net
+The official website is: www.starcoin.info
 
  
 FEATURES:
